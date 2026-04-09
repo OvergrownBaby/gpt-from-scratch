@@ -20,8 +20,7 @@ from random import randint
 enc = tiktoken.get_encoding("gpt2")
 openwebtext_ds = iter(load_dataset("openwebtext", split="train", streaming=True))
 
-
-gpt = LLM(batch_size=512, sample_len=32, d_model=64, d_k=16, n_layers=4, lr=1e-3)
+gpt = LLM(batch_size=32, sample_len=256, d_model=256, d_k=64, n_layers=6, lr=3e-4)
 
 losses = []
 training = True
