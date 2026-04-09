@@ -1,3 +1,5 @@
 torch
 gradio
 matplotlib
+tiktoken
+datasetes
