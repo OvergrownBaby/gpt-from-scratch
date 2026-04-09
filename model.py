@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 from random import randint
+import tiktoken
 
 class SelfAttention(nn.Module):
     def __init__(self, d_model, d_k):
@@ -105,31 +106,21 @@ class GPT(nn.Module):
         return self.head(output)
         
 class LLM():
-    def __init__(self, corpus, batch_size, sample_len, d_model, d_k, n_layers, lr):
+    def __init__(self, batch_size, sample_len, d_model, d_k, n_layers, lr):
         self.sample_len = sample_len
         self.batch_size = batch_size
-        self.corpus = corpus
-        chars = set(corpus)
-        self.char_to_int = {c:i for i, c in enumerate(chars)}
-        self.int_to_char = {i:c for i, c in enumerate(chars)}
-        self.corpus_ints = [self.char_to_int[char] for char in corpus]
+        self.enc = tiktoken.get_encoding("gpt2")
+        self.vocab_size = self.enc.n_vocab
 
-        self.model = GPT(vocab_size=len(chars), d_model=d_model, d_k=d_k, n_layers=n_layers, max_seq_len=sample_len)
+        self.model = GPT(vocab_size=self.vocab_size, d_model=d_model, d_k=d_k, n_layers=n_layers, max_seq_len=sample_len)
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=lr)
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
         self.model = self.model.to(self.device)
 
-    def train(self):
-        corpus = self.corpus_ints
-        seq_len = len(corpus)
-        start_idx = [randint(0, seq_len - self.sample_len - 1) for _ in range(self.batch_size)]
-        x_train = [corpus[idx:idx+self.sample_len] for idx in start_idx]
-        y_train = [corpus[idx+1:idx+self.sample_len+1] for idx in start_idx]
-        x_train, y_train = torch.tensor(x_train), torch.tensor(y_train)
-
-        x_train = x_train.to(self.device)
-        y_train = y_train.to(self.device)
+    def train(self, token_batch):
+        x_train = torch.tensor([t[:-1] for t in token_batch]).to(self.device)
+        y_train = torch.tensor([t[1:] for t in token_batch]).to(self.device)
 
         logits = self.model(x_train) # (10000, 32, vocab_size)
         loss = F.cross_entropy(logits.view(-1, logits.size(-1)), y_train.view(-1))
@@ -138,13 +129,11 @@ class LLM():
         self.optimizer.zero_grad()
         return loss.item()
 
-    def generate(self, start, num_chars):
-        start_int = [self.char_to_int[ch] for ch in start]
-        output = start_int
-        for i in range(num_chars):
-            # logits = self.model(torch.tensor(output[-self.sample_len:]))
+    def generate(self, start, num_tokens):
+        output = self.enc.encode(start)
+        for i in range(num_tokens):
             logits = self.model(torch.tensor(output[-self.sample_len:]).to(self.device))
             probs = torch.softmax(logits[-1], dim=-1)
             output.append(int(torch.multinomial(probs, 1)))
-        return ''.join([self.int_to_char[ch] for ch in output])
+        return self.enc.decode(output)
     

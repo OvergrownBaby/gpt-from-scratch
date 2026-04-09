@@ -1,24 +1,41 @@
 import gradio as gr
 from model import LLM
-import os
 import threading
-import urllib.request
 import time
 import torch
 
-if not os.path.exists("shakespeare.txt"):
-    url = "https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt"
-    urllib.request.urlretrieve(url, "shakespeare.txt")
+# import os
+# import urllib.request
+# if not os.path.exists("shakespeare.txt"):
+#     url = "https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt"
+#     urllib.request.urlretrieve(url, "shakespeare.txt")
 
-with open("shakespeare.txt", "r") as f:
-    corpus = f.read()
+# with open("shakespeare.txt", "r") as f:
+#     corpus = f.read()
 
-gpt = LLM(corpus, batch_size=512, sample_len=32, d_model=64, d_k=16, n_layers=4, lr=1e-3)
+from datasets import load_dataset
+import tiktoken
+from random import randint
+
+enc = tiktoken.get_encoding("gpt2")
+openwebtext_ds = iter(load_dataset("openwebtext", split="train", streaming=True))
+
+
+gpt = LLM(batch_size=512, sample_len=32, d_model=64, d_k=16, n_layers=4, lr=1e-3)
 
 losses = []
 training = True
 
 stats = {"iter": 0, "loss": 0, "best_loss": float("inf"), "iter_per_sec": 0, "tokens_per_sec": 0, "total_tokens": 0, "elapsed": 0, "lr": 1e-3}
+
+def get_batch_from_stream(ds):
+    batch = []
+    while len(batch) < gpt.batch_size:
+        tokens = enc.encode(next(ds)["text"])
+        if len(tokens) >= gpt.sample_len + 1:
+            start = randint(0, len(tokens) - gpt.sample_len - 1)
+            batch.append(tokens[start:start + gpt.sample_len + 1])
+    return batch
 
 def train_loop():
     global training
@@ -26,7 +43,8 @@ def train_loop():
     tokens_per_iter = gpt.batch_size * gpt.sample_len
     start = time.time()
     while training:
-        loss = gpt.train()
+        batch = get_batch_from_stream(openwebtext_ds)
+        loss = gpt.train(batch)
         losses.append(loss)
         i += 1
         elapsed = time.time() - start
