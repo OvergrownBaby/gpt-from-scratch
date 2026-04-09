@@ -40,9 +40,9 @@ def get_batch_from_stream(ds):
 def train_loop():
     global training
     i = 0
-    tokens_per_iter = gpt.batch_size * gpt.sample_len
     start = time.time()
     while training:
+        tokens_per_iter = gpt.batch_size * gpt.sample_len
         batch = get_batch_from_stream(openwebtext_ds)
         loss = gpt.train(batch)
         losses.append(loss)
@@ -105,5 +105,24 @@ with gr.Blocks() as app:
         status = gr.Textbox(label="Stats")
         refresh = gr.Button("Refresh")
         refresh.click(refresh_monitor, outputs=[plot, status])
+
+        lr_slider = gr.Slider(0.0001, 0.01, value=3e-4, label="Learning Rate")
+        lr_btn = gr.Button("Update LR")
+
+        def update_lr(new_lr):
+            for g in gpt.optimizer.param_groups:
+                g['lr'] = new_lr
+            return f"LR updated to {new_lr}"
+
+        lr_btn.click(update_lr, inputs=[lr_slider], outputs=status)
+
+        bs_slider = gr.Slider(1, 128, value=32, step=1, label="Batch Size")
+        bs_btn = gr.Button("Update Batch Size")
+
+        def update_bs(new_bs):
+            gpt.batch_size = int(new_bs)
+            return f"Batch size updated to {int(new_bs)}"
+
+        bs_btn.click(update_bs, inputs=[bs_slider], outputs=status)
 
 app.launch(server_name="0.0.0.0", share=True)
