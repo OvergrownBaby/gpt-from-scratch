@@ -54,7 +54,7 @@ with gr.Blocks() as app:
         refresh = gr.Button("Refresh")
         refresh.click(get_loss_plot, outputs=plot)
 
-app.launch(server_name="0.0.0.0")
+app.launch(server_name="0.0.0.0", share=True)
 
 
 # import gradio as gr
