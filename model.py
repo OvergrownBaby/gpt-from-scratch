@@ -7,9 +7,9 @@ import tiktoken
 class SelfAttention(nn.Module):
     def __init__(self, d_model, d_k):
         super().__init__()
-        self.Wk = nn.Parameter(torch.randn(d_model, d_k))
-        self.Wq = nn.Parameter(torch.randn(d_model, d_k))
-        self.Wv = nn.Parameter(torch.randn(d_model, d_k))
+        self.Wk = nn.Parameter(torch.randn(d_model, d_k) * 0.02)
+        self.Wq = nn.Parameter(torch.randn(d_model, d_k) * 0.02)
+        self.Wv = nn.Parameter(torch.randn(d_model, d_k) * 0.02)
         self.d_k = d_k
 
     def forward(self, X):
@@ -29,7 +29,7 @@ class MultiHeadAttention(nn.Module):
         super().__init__()
         # first we find calculate h how many blocks are there
         self.h = int(d_model/d_k)
-        self.Wo = nn.Parameter(torch.randn(d_model, d_model))
+        self.Wo = nn.Parameter(torch.randn(d_model, d_model) * 0.02)
         self.heads = nn.ModuleList([SelfAttention(d_model, d_k) for _ in range(self.h)])
 
     def forward(self, X):
@@ -43,8 +43,8 @@ class FeedForward(nn.Module):
     def __init__(self, d_model):
         super().__init__()
         self.d_ff = 4 * d_model # ffn's wider dimension
-        self.W1 = nn.Parameter(torch.randn(d_model, self.d_ff)) # map to wider dimension
-        self.W2 = nn.Parameter(torch.randn(self.d_ff, d_model)) # map back
+        self.W1 = nn.Parameter(torch.randn(d_model, self.d_ff) * 0.02) # map to wider dimension
+        self.W2 = nn.Parameter(torch.randn(self.d_ff, d_model) * 0.02) # map back
     
     def forward(self, X):
         hidden  = torch.matmul(X, self.W1)
@@ -125,6 +125,7 @@ class LLM():
         logits = self.model(x_train) # (10000, 32, vocab_size)
         loss = F.cross_entropy(logits.view(-1, logits.size(-1)), y_train.view(-1))
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
         self.optimizer.step()
         self.optimizer.zero_grad()
         return loss.item()
