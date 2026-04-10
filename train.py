@@ -3,8 +3,8 @@ from model import LLM
 import threading
 import time
 import torch
+import os
 
-# import os
 # import urllib.request
 # if not os.path.exists("shakespeare.txt"):
 #     url = "https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt"
@@ -22,15 +22,24 @@ openwebtext_ds = iter(load_dataset("openwebtext", split="train", streaming=True)
 
 gpt = LLM(batch_size=32, sample_len=256, d_model=256, d_k=64, n_layers=6, lr=3e-4)
 
+if os.path.exists("checkpoint.pt"):
+    gpt.model.load_state_dict(torch.load("checkpoint.pt"))
+
 losses = []
 training = True
 
 stats = {"iter": 0, "loss": 0, "best_loss": float("inf"), "iter_per_sec": 0, "tokens_per_sec": 0, "total_tokens": 0, "elapsed": 0, "lr": 1e-3}
 
 def get_batch_from_stream(ds):
+    global openwebtext_ds
     batch = []
     while len(batch) < gpt.batch_size:
-        tokens = enc.encode(next(ds)["text"])
+        try:
+            tokens = enc.encode(next(ds)["text"])
+        except (StopIteration, RuntimeError):
+            openwebtext_ds = iter(load_dataset("openwebtext", split="train", streaming=True))
+            ds = openwebtext_ds
+            continue
         if len(tokens) >= gpt.sample_len + 1:
             start = randint(0, len(tokens) - gpt.sample_len - 1)
             batch.append(tokens[start:start + gpt.sample_len + 1])
@@ -57,6 +66,9 @@ def train_loop():
         stats["lr"] = gpt.optimizer.param_groups[0]["lr"]
         if i % 100 == 0:
             print(f"{i}: loss={loss:.4f} | {stats['iter_per_sec']:.1f} it/s | {stats['tokens_per_sec']:.0f} tok/s")
+        if i % 5000 == 0:
+            torch.save(gpt.model.state_dict(), "checkpoint.pt")
+
 
 thread = threading.Thread(target=train_loop, daemon=True)
 thread.start()
