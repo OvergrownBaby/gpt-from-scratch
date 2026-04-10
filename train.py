@@ -22,8 +22,11 @@ openwebtext_ds = iter(load_dataset("openwebtext", split="train", streaming=True)
 
 gpt = LLM(batch_size=32, sample_len=256, d_model=256, d_k=64, n_layers=6, lr=3e-4)
 
+# load
 if os.path.exists("checkpoint.pt"):
-    gpt.model.load_state_dict(torch.load("checkpoint.pt"))
+    ckpt = torch.load("checkpoint.pt")
+    gpt.model.load_state_dict(ckpt['model'])
+    gpt.optimizer.load_state_dict(ckpt['optimizer'])
 
 losses = []
 training = True
@@ -67,7 +70,12 @@ def train_loop():
         if i % 100 == 0:
             print(f"{i}: loss={loss:.4f} | {stats['iter_per_sec']:.1f} it/s | {stats['tokens_per_sec']:.0f} tok/s")
         if i % 5000 == 0:
-            torch.save(gpt.model.state_dict(), "checkpoint.pt")
+            torch.save({
+                'model': gpt.model.state_dict(),
+                'optimizer': gpt.optimizer.state_dict(),
+                'iter': i,
+            }, "checkpoint.pt")
+
 
 
 thread = threading.Thread(target=train_loop, daemon=True)
